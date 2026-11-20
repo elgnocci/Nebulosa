@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Nebulosa — nodos visuales</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+/* VOICE: un instrumento nocturno, técnico pero vivo
+   IDEA: un cosmos donde cada operador de TouchDesigner es una nebulosa
+   PICTURE: el grafo mismo, a pantalla completa
+   COLOUR and TYPE: negro espacial, violeta TOP, verde CHOP, oro salida; Sora
+   LAYOUT: lienzo completo, barra superior delgada, paneles que suben desde abajo */
+:root{color-scheme:dark;--bg:#05060d;--ink:#e8eaf6;--mut:#8c92b4;--top:#a77bff;--chop:#4fe0a0;--out:#ffc35a;--err:#ff6b7f;--panel:#0d1020ee;--line:#262b48}
+*{box-sizing:border-box;min-width:0;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:15px/1.45 Sora,system-ui,sans-serif;overflow:hidden;overscroll-behavior:none}
+#stage{position:fixed;inset:0;touch-action:none}
+#stage canvas{position:absolute;inset:0;width:100%;height:100%}
+#gl{pointer-events:none}
+#bar{position:fixed;top:0;left:0;right:0;display:flex;gap:6px;align-items:center;padding:8px 10px;padding-top:max(8px,env(safe-area-inset-top));background:#05060de6;border-bottom:1px solid #151a33;z-index:5}
+#bar button{flex:none;padding:0 10px}#bar .logo{flex:1;font-weight:600;letter-spacing:.02em;margin-right:auto;font-size:16px}
+#bar .logo small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:300;font-size:11px;color:var(--mut)}
+button{font:inherit;color:var(--ink);background:#151a33;border:1px solid var(--line);border-radius:10px;min-height:40px;min-width:40px;padding:0 12px;cursor:pointer}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--top);outline-offset:1px}
+button.on{background:var(--top);color:#120a26;border-color:var(--top)}
+button.rec{color:var(--err)}button.rec.on{background:var(--err);color:#200}
+.sheet{position:fixed;left:0;right:0;bottom:0;max-height:62vh;overflow-y:auto;background:var(--panel);backdrop-filter:blur(10px);border-top:1px solid var(--line);border-radius:18px 18px 0 0;padding:14px 14px calc(18px + env(safe-area-inset-bottom));z-index:8;transform:translateY(105%);transition:transform .25s ease}
+.sheet.open{transform:none}
+.grab{width:42px;height:4px;border-radius:2px;background:#3a4066;margin:0 auto 10px}
+.hd{display:flex;gap:8px;align-items:center}
+.hd input{flex:1;font:600 17px Sora,sans-serif;background:transparent;border:0;color:var(--ink);padding:4px 0}
+.badge{font-size:11px;padding:3px 8px;border-radius:20px;font-weight:600}
+.b-TOP{background:#a77bff33;color:#d4bfff}.b-CHOP{background:#4fe0a033;color:#a6f5cf}
+.desc{color:var(--mut);font-size:13px;margin:4px 0 10px}
+.errbox{background:#ff6b7f22;color:#ffb3bd;border-radius:8px;padding:6px 10px;font-size:13px;margin-bottom:8px}
+.row{display:grid;grid-template-columns:96px minmax(0,1fr) auto;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid #1a1f3a}
+.row label{font-size:13px;color:#c5c9e6}
+.row .ctl{display:flex;gap:6px;align-items:center}
+.row input[type=range]{flex:1;accent-color:var(--top)}
+.row input[type=number],.row input[type=text],.row select{background:#0a0d1c;color:var(--ink);border:1px solid var(--line);border-radius:8px;font:16px Sora,sans-serif;padding:6px 8px;width:100%}
+.row input[type=number]{width:76px;flex:none}
+.row input[type=color]{width:52px;height:36px;border:0;background:none;padding:0}
+.row .x{display:flex;gap:4px}
+.row .x button{min-width:36px;min-height:36px;padding:0;font-size:14px}
+.row .x button.on{background:#3d7bff;border-color:#3d7bff;color:#fff}
+.row.expr input[type=text]{color:#8fb6ff}
+.row.export input[type=text]{color:#7cf0b7}
+.row .val{font-size:12px;color:var(--mut);grid-column:2/4}
+.ins{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px}
+.ins span{font-size:12px;background:#151a33;border:1px solid var(--line);border-radius:20px;padding:4px 4px 4px 10px;display:flex;gap:6px;align-items:center}
+.ins span button{min-height:26px;min-width:26px;padding:0;border-radius:20px;font-size:12px}
+.acts{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.acts .del{color:var(--err)}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.item{text-align:left;padding:9px 10px;min-height:56px;display:block}
+.item b{display:block;font-weight:600;font-size:14px}
+.item span{display:block;font-size:12px;color:var(--mut);line-height:1.3}
+.it-TOP b{color:#cdb6ff}.it-CHOP b{color:#9ff2c9}
+h3{font-size:14px;margin:14px 0 8px;color:var(--mut);font-weight:400}
+.help p,.help li{font-size:14px;color:#c9cce6}.help b{color:var(--ink)}.help code{color:#8fb6ff;font-size:13px}
+.help ul{padding-left:18px;margin:6px 0}
+#toast{position:fixed;left:50%;top:70px;transform:translateX(-50%);background:#1b2142;border:1px solid var(--line);padding:9px 14px;border-radius:12px;font-size:13px;z-index:20;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw;text-align:center}
+#toast.show{opacity:1}
+.pad{width:100%;max-width:240px;aspect-ratio:1;border:1px solid var(--line);border-radius:12px;background:radial-gradient(#4fe0a022,#0a0d1c);position:relative;touch-action:none;margin:6px 0}
+.pad i{position:absolute;width:18px;height:18px;margin:-9px;border-radius:50%;background:var(--chop)}
+.filebtn{display:inline-flex;align-items:center;min-height:40px;padding:0 14px;border-radius:10px;background:#151a33;border:1px solid var(--line);position:relative;overflow:hidden}
+.filebtn input{position:absolute;inset:0;opacity:0;font-size:40px;cursor:pointer}
+.links button{display:block;width:100%;text-align:left;margin:4px 0}
+#outhint{position:fixed;bottom:calc(16px + env(safe-area-inset-bottom));left:0;right:0;text-align:center;font-size:12px;color:var(--mut);pointer-events:none;z-index:4}
+@media (prefers-reduced-motion:reduce){.sheet{transition:none}}
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="bg"></canvas><canvas id="gl"></canvas></div>
+<div id="bar">
+  <div class="logo">Nebulosa<small id="sub">cosmos · toca largo para crear</small></div>
+  <button id="bUndo" aria-label="Deshacer">↶</button>
+  <button id="bAdd" aria-label="Agregar operador">＋</button>
+  <button id="bView">Resultado</button>
+  <button id="bRec" class="rec" aria-label="Grabar">●</button>
+  <button id="bMenu" aria-label="Menú">☰</button>
+</div>
+<div id="outhint" hidden>Arrastra el dedo aquí para mover el Mouse In CHOP</div>
+<div id="toast"></div>
+<div class="sheet" id="pPanel"><div class="grab"></div><div id="pBody"></div></div>
+<div class="sheet" id="pAdd"><div class="grab"></div><div id="addBody"></div></div>
+<div class="sheet" id="pMenu"><div class="grab"></div><div id="menuBody"></div></div>
+<input type="file" id="fileIn" hidden>
+
+<script>
+{
+const $=s=>document.querySelector(s);
+const stage=$('#stage'),bgc=$('#bg'),glc=$('#gl'),ctx=bgc.getContext('2d');
+const gl=glc.getContext('webgl2',{premultipliedAlpha:false,alpha:true,antialias:false});
+let W=0,H=0,DPR=1;
+function toast(m,ms=2600){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),ms)}
+
+/* ---------- WebGL núcleo ---------- */
+let HF=false,IF,TY;
+if(gl){HF=!!gl.getExtension('EXT_color_buffer_float');IF=HF?gl.RGBA16F:gl.RGBA8;TY=HF?gl.HALF_FLOAT:gl.UNSIGNED_BYTE;gl.bindVertexArray(gl.createVertexArray())}
+const VS=`#version 300 es
+out vec2 uv;void main(){vec2 p=vec2(float((gl_VertexID<<1)&2),float(gl_VertexID&2))*2.-1.;uv=p*.5+.5;gl_Position=vec4(p,0,1);}`;
+const HEAD=`#version 300 es
+precision highp float;in vec2 uv;out vec4 o;
+uniform sampler2D uIn0,uIn1,uIn2,uIn3;uniform vec2 uRes;uniform float uTime;
+float lum(vec3 c){return dot(c,vec3(.299,.587,.114));}
+vec3 rgb2hsv(vec3 c){vec4 K=vec4(0.,-1./3.,2./3.,-1.);vec4 p=mix(vec4(c.bg,K.wz),vec4(c.gb,K.xy),step(c.b,c.g));vec4 q=mix(vec4(p.xyw,c.r),vec4(c.r,p.yzx),step(p.x,c.r));float d=q.x-min(q.w,q.y);float e=1e-10;return vec3(abs(q.z+(q.w-q.y)/(6.*d+e)),d/(q.x+e),q.x);}
+vec3 hsv2rgb(vec3 c){vec3 p=abs(fract(c.xxx+vec3(1.,2./3.,1./3.))*6.-3.);return c.z*mix(vec3(1.),clamp(p-1.,0.,1.),c.y);}
+float h3(vec3 p){p=fract(p*.3183099+.1);p*=17.;return fract(p.x*p.y*p.z*(p.x+p.y+p.z));}
+float vn(vec3 x){vec3 i=floor(x),f=fract(x);f=f*f*(3.-2.*f);return mix(mix(mix(h3(i),h3(i+vec3(1,0,0)),f.x),mix(h3(i+vec3(0,1,0)),h3(i+vec3(1,1,0)),f.x),f.y),mix(mix(h3(i+vec3(0,0,1)),h3(i+vec3(1,0,1)),f.x),mix(h3(i+vec3(0,1,1)),h3(i+vec3(1,1,1)),f.x),f.y),f.z)*2.-1.;}
+float fbm(vec3 p,float H,float g){float a=1.,s=0.,t=0.;for(int i=0;i<8;i++){if(float(i)>=H)break;s+=a*vn(p);t+=a;p=p*2.01+vec3(3.1,1.7,.3);a*=g;}return s/max(t,1e-4);}
+vec2 ext(vec2 u,float m){if(m<1.5)return clamp(u,0.,1.);if(m<2.5)return fract(u);return 1.-abs(mod(u,2.)-1.);}
+vec4 samp(sampler2D s,vec2 u,float m){if(m<.5&&(u.x<0.||u.x>1.||u.y<0.||u.y>1.))return vec4(0);return texture(s,ext(u,m));}
+`;
+const progs=new Map();
+function prog(body){
+  if(progs.has(body))return progs.get(body);
+  const mk=(t,s)=>{const sh=gl.createShader(t);gl.shaderSource(sh,s);gl.compileShader(sh);if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS))throw new Error('GLSL: '+gl.getShaderInfoLog(sh));return sh};
+  const p=gl.createProgram();gl.attachShader(p,mk(gl.VERTEX_SHADER,VS));const decl=[...new Set(body.match(/\bu_\w+/g)||[])].map(u=>'uniform '+(/^u_(ts|ss|dir)$/.test(u)?'vec2':/^u_(color\d?|bgcolor)$/.test(u)?'vec3':'float')+' '+u+';').join('');
+  gl.attachShader(p,mk(gl.FRAGMENT_SHADER,HEAD+decl+'void main(){'+body+'}'));gl.linkProgram(p);
+  if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(p));
+  const r={p,loc:{}};progs.set(body,r);return r;
+}
+function mkTex(){const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);for(const[k,v]of[[gl.TEXTURE_MIN_FILTER,gl.LINEAR],[gl.TEXTURE_MAG_FILTER,gl.LINEAR],[gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE],[gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE]])gl.texParameteri(gl.TEXTURE_2D,k,v);return t}
+function target(old,w,h){
+  if(old&&old.w===w&&old.h===h)return old;
+  if(old){gl.deleteTexture(old.tex);gl.deleteFramebuffer(old.fb)}
+  const tex=mkTex();gl.texImage2D(gl.TEXTURE_2D,0,IF,w,h,0,gl.RGBA,TY,null);
+  const fb=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,fb);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,tex,0);
+  if(HF&&gl.checkFramebufferStatus(gl.FRAMEBUFFER)!==gl.FRAMEBUFFER_COMPLETE){HF=false;IF=gl.RGBA8;TY=gl.UNSIGNED_BYTE;gl.deleteTexture(tex);gl.deleteFramebuffer(fb);return target(null,w,h)}
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null);return{tex,fb,w,h};
+}
+let BLACK=null;
+if(gl){BLACK={tex:mkTex(),w:1,h:1};gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array([0,0,0,255]))}
+let TIME=0,FRAME=0,DT=1/60;
+function pass(body,tgt,u,vp){
+  const pr=prog(body);gl.useProgram(pr.p);
+  if(tgt){gl.bindFramebuffer(gl.FRAMEBUFFER,tgt.fb);gl.viewport(0,0,tgt.w,tgt.h)}else{gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(...vp)}
+  const L=k=>k in pr.loc?pr.loc[k]:(pr.loc[k]=gl.getUniformLocation(pr.p,k));
+  let unit=0;const all=Object.assign({uIn0:BLACK,uIn1:BLACK,uIn2:BLACK,uIn3:BLACK,uRes:tgt?[tgt.w,tgt.h]:[vp[2],vp[3]],uTime:TIME},u);
+  for(const k in all){const v=all[k],l=L(k);if(l===null)continue;
+    if(v&&v.tex){gl.activeTexture(gl.TEXTURE0+unit);gl.bindTexture(gl.TEXTURE_2D,v.tex);gl.uniform1i(l,unit++)}
+    else if(typeof v==='number')gl.uniform1f(l,v);
+    else if(Array.isArray(v))gl['uniform'+v.length+'fv'](l,v);}
+  gl.drawArrays(gl.TRIANGLES,0,3);
+}
+const COPY='o=texture(uIn0,uv);';
+
+/* ---------- Definición de parámetros ---------- */
+const F=(k,l,d,mn=0,mx=1)=>({k,l,t:'f',d,mn,mx});
+const M=(k,l,o,d=0)=>({k,l,t:'m',o,d});
+const C=(k,l,d)=>({k,l,t:'c',d});
+const TG=(k,l,d=0)=>({k,l,t:'t',d});
+const S=(k,l,d)=>({k,l,t:'s',d});
+const OPR=(k,l)=>({k,l,t:'op',d:''});
+const PU=(k,l)=>({k,l,t:'p'});
+const RESG=['540x960','720x1280','1080x1920','512x512','1024x1024','960x540'];
+const RESF=['Usar entrada',...RESG];
+const resG=()=>M('res','Resolución',RESG,0),resF=()=>M('res','Resolución',RESF,0);
+const EXT=['Cero','Mantener','Repetir','Espejo'];
+function resolveRes(n,p,ins){
+  const o=(TYPES[n.type].gen?RESG:RESF)[p.res|0]||'540x960';
+  if(o==='Usar entrada'){const i=ins[0];return i&&i.out?[i.out.w,i.out.h]:[540,960]}
+  if(o==='Archivo'){return null}
+  return o.split('x').map(Number);
+}
+function srcRes(el){let w=el.videoWidth||el.naturalWidth||540,h=el.videoHeight||el.naturalHeight||960;const s=Math.min(1,1080/Math.max(w,h));return[Math.round(w*s)||2,Math.round(h*s)||2]}
+
+/* ---------- Tipos de operador ---------- */
+const genTOP=fs=>(n,p,ins)=>{const[w,h]=resolveRes(n,p,ins);n.out=target(n.out,w,h);pass(fs,n.out,uni(n,p,ins))};
+function uni(n,p,ins){const u={};for(const d of TYPES[n.type].params){if(d.t==='f'||d.t==='m'||d.t==='t')u['u_'+d.k]=+p[d.k]||0;else if(d.t==='c')u['u_'+d.k]=p[d.k]}ins.forEach((s,i)=>{if(s&&s.out)u['uIn'+i]=s.out});return u}
+const needIn=(ins,k=1)=>{for(let i=0;i<k;i++)if(!ins[i]||!ins[i].out)throw new Error(k>1?'Necesita '+k+' entradas conectadas':'Conecta una entrada')};
+const filt=fs=>(n,p,ins)=>{needIn(ins);genTOP(fs)(n,p,ins)};
+const SRCFIT=`vec2 q=uv;float ta=u_ss.x/u_ss.y,va=uRes.x/uRes.y;if(ta>va)q.x=(q.x-.5)*va/ta+.5;else q.y=(q.y-.5)*ta/va+.5;if(u_mx>.5)q.x=1.-q.x;o=vec4(texture(uIn0,q).rgb,1.);`;
+const CHECK=`vec2 g=floor(uv*vec2(uRes.x/uRes.y,1.)*8.);float c=mod(g.x+g.y,2.);o=vec4(vec3(.1+.06*c),1.);`;
+function cookSource(n,p,ins,mirror){
+  const el=n.src;
+  const opt=RESG.concat(['Archivo']);const o=['Archivo',...RESG][p.res|0];
+  let w,h;
+  if(el&&(el.videoWidth||el.naturalWidth)){[w,h]=o==='Archivo'?srcRes(el):o.split('x').map(Number)}else{[w,h]=o==='Archivo'?[540,960]:o.split('x').map(Number)}
+  n.out=target(n.out,w,h);
+  if(!el||!(el.videoWidth||el.naturalWidth)){pass(CHECK,n.out,{});return}
+  if(!n.stex)n.stex={tex:mkTex(),w:1,h:1};
+  gl.bindTexture(gl.TEXTURE_2D,n.stex.tex);gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
+  if(el.tagName==='VIDEO'){if(el.readyState>=2)gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,el)}
+  else if(!n.uploaded){gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,el);n.uploaded=true}
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);
+  pass(SRCFIT,n.out,{uIn0:n.stex,u_ss:srcRes(el),u_mx:mirror?1:0});
+}
+const SRCRES=()=>M('res','Resolución',['Archivo',...RESG],0);
+
+let AC=null;
+function ensureAC(){if(!AC){try{AC=new (window.AudioContext||window.webkitAudioContext)()}catch(e){}}if(AC&&AC.state==='suspended')AC.resume().catch(()=>{});return AC}
+function audioWave(n){if(!n.an){throw new Error(n.devErr||'Sin audio todavía')}const b=n.wbuf||(n.wbuf=new Float32Array(n.an.fftSize));n.an.getFloatTimeDomainData(b);return[{name:'chan1',s:Array.from(b.subarray(0,256),v=>v*1)}]}
+function mkAnalyser(){const a=AC.createAnalyser();a.fftSize=512;a.smoothingTimeConstant=.6;return a}
+
+const MOUSE={tx:0,ty:0,sel:0};
+const ORI={rx:0,ry:0,rz:0,got:false};
+window.addEventListener('deviceorientation',e=>{if(e.beta==null)return;ORI.got=true;ORI.rx=e.beta;ORI.ry=e.gamma;ORI.rz=e.alpha});
+
+const hash1=i=>{const x=Math.sin(i*127.1+311.7)*43758.5453;return x-Math.floor(x)};
+const vnoise1=x=>{const i=Math.floor(x),f=x-i,u=f*f*(3-2*f);return(hash1(i)*(1-u)+hash1(i+1)*u)*2-1};
+const mapCh=(ins,fn)=>{const s=ins[0];if(!s||!s.chans)throw new Error('Conecta una entrada CHOP');return s.chans.map((c,ci)=>({name:c.name,s:fn(c.s,ci)}))};
+
+const TYPES={
+ constTOP:{fam:'TOP',base:'constant',name:'Constant TOP',gen:1,ins:0,d:'Un color sólido. El TOP más simple de todos.',params:[resG(),C('color','Color',[.25,.4,1]),F('alpha','Alfa',1)],cook:genTOP('o=vec4(u_color*u_alpha,u_alpha);')},
+ noiseTOP:{fam:'TOP',base:'noise',name:'Noise TOP',gen:1,ins:0,d:'Ruido orgánico. Anímalo con una expresión en Translate Z.',params:[resG(),F('period','Periodo',1,.05,4),F('harmonics','Armónicos',3,1,8),F('gain','Rugosidad',.5),F('amp','Amplitud',.5,0,2),F('offset','Offset',.5,-1,1),F('tx','Translate X',0,-5,5),F('ty','Translate Y',0,-5,5),{...F('tz','Translate Z',0,-10,10),e:'absTime.seconds*0.3'},TG('mono','Monocromo',1)],
+  cook:genTOP(`float asp=uRes.x/uRes.y;vec3 p=vec3((uv-.5)*vec2(asp,1.)/max(u_period,.001)+vec2(u_tx,u_ty),u_tz);vec3 c;if(u_mono>.5)c=vec3(fbm(p,u_harmonics,u_gain));else c=vec3(fbm(p,u_harmonics,u_gain),fbm(p+vec3(13.1,7.3,0.),u_harmonics,u_gain),fbm(p+vec3(5.7,23.9,0.),u_harmonics,u_gain));o=vec4(c*u_amp+u_offset,1.);`)},
+ rampTOP:{fam:'TOP',base:'ramp',name:'Ramp TOP',gen:1,ins:0,d:'Degradado entre dos colores: horizontal, vertical, radial o circular.',params:[resG(),M('type','Tipo',['Horizontal','Vertical','Radial','Circular'],0),F('phase','Fase',0,-1,1),C('color1','Color 1',[.05,.05,.2]),C('color2','Color 2',[1,.4,.7])],
+  cook:genTOP(`float t;vec2 q=uv-.5;q.x*=uRes.x/uRes.y;if(u_type<.5)t=uv.x;else if(u_type<1.5)t=uv.y;else if(u_type<2.5)t=length(q)*2.;else t=atan(q.y,q.x)/6.2831853+.5;t+=u_phase;t=u_type>2.5?fract(t):clamp(t,0.,1.);o=vec4(mix(u_color1,u_color2,t),1.);`)},
+ circleTOP:{fam:'TOP',base:'circle',name:'Circle TOP',gen:1,ins:0,d:'Un círculo. El fondo es transparente, como en TD.',params:[resG(),F('radius','Radio',.2,0,1),F('cx','Centro X',0,-1,1),F('cy','Centro Y',0,-1,1),F('softness','Suavidad',.01,0,.5),C('color','Color',[1,1,1]),C('bgcolor','Color fondo',[0,0,0]),F('bgalpha','Alfa fondo',0)],
+  cook:genTOP(`vec2 q=uv-.5;q.x*=uRes.x/uRes.y;float d=length(q-vec2(u_cx,u_cy));float m=1.-smoothstep(u_radius-u_softness*.5-1e-4,u_radius+u_softness*.5,d);o=vec4(mix(u_bgcolor*u_bgalpha,u_color,m),mix(u_bgalpha,1.,m));`)},
+ rectTOP:{fam:'TOP',base:'rectangle',name:'Rectangle TOP',gen:1,ins:0,d:'Un rectángulo con tamaño, centro y bordes suaves.',params:[resG(),F('sx','Ancho',.4,0,2),F('sy','Alto',.25,0,2),F('cx','Centro X',0,-1,1),F('cy','Centro Y',0,-1,1),F('softness','Suavidad',.01,0,.5),C('color','Color',[1,1,1]),F('bgalpha','Alfa fondo',0)],
+  cook:genTOP(`vec2 q=uv-.5;q.x*=uRes.x/uRes.y;vec2 d=abs(q-vec2(u_cx,u_cy))-vec2(u_sx,u_sy)*.5;float m=1.-smoothstep(-u_softness*.5-1e-4,u_softness*.5,max(d.x,d.y));o=vec4(u_color*m,mix(u_bgalpha,1.,m));`)},
+ movieTOP:{fam:'TOP',base:'moviefilein',name:'Movie File In TOP',gen:1,ins:0,d:'Carga una imagen o video de tu teléfono. En TD es la forma de traer material.',params:[SRCRES(),{k:'file',l:'Archivo',t:'file'}],cook:(n,p)=>{if(!n.src)n.err='Toca "Elegir archivo"';cookSource(n,p,[],false)}},
+ videoTOP:{fam:'TOP',base:'videodevin',name:'Video Device In TOP',gen:1,ins:0,d:'La cámara en vivo. Funciona solo si el navegador da permiso de cámara.',params:[SRCRES(),M('cam','Cámara',['Trasera','Frontal'],1),TG('mirror','Espejar',1)],
+  cook:(n,p)=>{startCam(n,p.cam|0);if(n.devErr)n.err=n.devErr;cookSource(n,p,[],p.mirror>.5)}},
+ levelTOP:{fam:'TOP',base:'level',name:'Level TOP',gen:0,ins:1,d:'Brillo, contraste, gamma, invertir y opacidad. El ajuste básico de imagen.',params:[resF(),F('brightness','Brillo',1,0,3),F('contrast','Contraste',1,0,3),F('gamma','Gamma',1,.1,3),F('invert','Invertir',0),F('opacity','Opacidad',1)],
+  cook:filt(`vec4 c=texture(uIn0,uv);vec3 r=(c.rgb-.5)*u_contrast+.5;r*=u_brightness;r=pow(max(r,0.),vec3(1./max(u_gamma,.01)));r=mix(r,vec3(1.)-r,u_invert);o=vec4(r,c.a)*u_opacity;`)},
+ hsvTOP:{fam:'TOP',base:'hsvadjust',name:'HSV Adjust TOP',gen:0,ins:1,d:'Gira el tono, cambia saturación y valor. Ideal para arcoíris en feedback.',params:[resF(),F('hueoffset','Tono (grados)',0,-180,180),F('satmult','Saturación',1,0,3),F('valmult','Valor',1,0,3)],
+  cook:filt(`vec4 c=texture(uIn0,uv);vec3 h=rgb2hsv(c.rgb);h.x=fract(h.x+u_hueoffset/360.);h.y=clamp(h.y*u_satmult,0.,1.);h.z*=u_valmult;o=vec4(hsv2rgb(h),c.a);`)},
+ blurTOP:{fam:'TOP',base:'blur',name:'Blur TOP',gen:0,ins:1,d:'Desenfoque en dos pasadas (horizontal y vertical), igual que en TD.',params:[resF(),F('size','Tamaño',8,0,64)],
+  cook:(n,p,ins)=>{needIn(ins);const[w,h]=resolveRes(n,p,ins);n.out=target(n.out,w,h);n.tmp=target(n.tmp,w,h);const B=`float w[5]=float[](.227,.1945,.1216,.054,.0162);vec4 s=texture(uIn0,uv)*w[0];for(int i=1;i<5;i++){vec2 d=u_dir*float(i)*u_size/4./uRes;s+=(texture(uIn0,uv+d)+texture(uIn0,uv-d))*w[i];}o=s;`;pass(B,n.tmp,{uIn0:ins[0].out,u_dir:[1,0],u_size:+p.size});pass(B,n.out,{uIn0:n.tmp,u_dir:[0,1],u_size:+p.size})}},
+ xformTOP:{fam:'TOP',base:'transform',name:'Transform TOP',gen:0,ins:1,d:'Mueve, rota y escala. Con un Feedback crea túneles infinitos.',params:[resF(),F('tx','Translate X',0,-1,1),F('ty','Translate Y',0,-1,1),F('rotate','Rotar (grados)',0,-180,180),F('sx','Escala X',1,0,3),F('sy','Escala Y',1,0,3),M('extend','Extender',EXT,0)],
+  cook:filt(`float asp=uRes.x/uRes.y;vec2 q=uv-.5;q.x*=asp;q-=vec2(u_tx,u_ty);float a=-radians(u_rotate);q=mat2(cos(a),sin(a),-sin(a),cos(a))*q;q/=vec2((u_sx<0.?-1.:1.)*max(abs(u_sx),1e-4),(u_sy<0.?-1.:1.)*max(abs(u_sy),1e-4));q.x/=asp;o=samp(uIn0,q+.5,u_extend);`)},
+ dispTOP:{fam:'TOP',base:'displace',name:'Displace TOP',gen:0,ins:2,d:'Deforma la entrada 1 usando los colores de la entrada 2 como mapa.',params:[resF(),F('weight','Peso',.1,0,1),F('midpoint','Punto medio',.5),M('extend','Extender',EXT,3)],
+  cook:(n,p,ins)=>{needIn(ins,2);genTOP(`vec2 m=texture(uIn1,uv).rg-u_midpoint;o=samp(uIn0,uv+m*u_weight,u_extend);`)(n,p,ins)}},
+ edgeTOP:{fam:'TOP',base:'edge',name:'Edge TOP',gen:0,ins:1,d:'Detecta bordes. Convierte cualquier imagen en líneas.',params:[resF(),F('strength','Fuerza',2,0,10),F('width','Grosor',1,.5,5),TG('comp','Sobre original',0)],
+  cook:filt(`vec2 px=u_width/uRes;float tl=lum(texture(uIn0,uv+px*vec2(-1,1)).rgb),t=lum(texture(uIn0,uv+px*vec2(0,1)).rgb),tr=lum(texture(uIn0,uv+px*vec2(1,1)).rgb),l=lum(texture(uIn0,uv+px*vec2(-1,0)).rgb),r=lum(texture(uIn0,uv+px*vec2(1,0)).rgb),bl=lum(texture(uIn0,uv+px*vec2(-1,-1)).rgb),b=lum(texture(uIn0,uv+px*vec2(0,-1)).rgb),br=lum(texture(uIn0,uv+px*vec2(1,-1)).rgb);float gx=-tl-2.*l-bl+tr+2.*r+br,gy=tl+2.*t+tr-bl-2.*b-br;float e=length(vec2(gx,gy))*u_strength;vec3 c=texture(uIn0,uv).rgb;o=vec4(u_comp>.5?c+e:vec3(e),1.);`)},
+ mirrorTOP:{fam:'TOP',base:'mirror',name:'Mirror TOP',gen:0,ins:1,d:'Espejo simple o caleidoscopio con segmentos.',params:[resF(),M('mode','Modo',['Izq → der','Arriba → abajo','Ambos','Caleidoscopio'],3),F('segments','Segmentos',6,1,24),F('rotate','Rotar',0,-180,180)],
+  cook:filt(`vec2 q=uv;float asp=uRes.x/uRes.y;if(u_mode<.5)q.x=min(q.x,1.-q.x);else if(u_mode<1.5)q.y=max(q.y,1.-q.y);else if(u_mode<2.5)q=vec2(min(q.x,1.-q.x),max(q.y,1.-q.y));else{vec2 p=uv-.5;p.x*=asp;float r=length(p);float a=atan(p.y,p.x)+radians(u_rotate);float sg=6.2831853/max(floor(u_segments),1.);a=mod(a,sg);a=abs(a-sg*.5);p=vec2(cos(a),sin(a))*r;p.x/=asp;q=p+.5;}o=samp(uIn0,q,3.);`)},
+ fbTOP:{fam:'TOP',base:'feedback',name:'Feedback TOP',gen:0,ins:1,d:'Entrega el cuadro ANTERIOR del TOP de destino. Es el corazón de los loops de TD.',params:[resF(),OPR('target','TOP destino'),PU('reset','Reset')],
+  cook:(n,p,ins)=>{needIn(ins);const[w,h]=resolveRes(n,p,ins);n.out=target(n.out,w,h);
+   if(!p.target)n.err='Elige el TOP destino (normalmente el que cierra el loop)';
+   pass(COPY,n.out,{uIn0:(n.prev&&!n.doReset)?n.prev:ins[0].out});n.doReset=false}},
+ compTOP:{fam:'TOP',base:'comp',name:'Composite TOP',gen:0,ins:4,d:'Mezcla varias entradas: sumar, multiplicar, encima, pantalla, diferencia…',params:[resF(),M('operation','Operación',['Sumar','Multiplicar','Encima (over)','Pantalla','Diferencia','Restar','Máximo','Mínimo'],0)],
+  cook:(n,p,ins)=>{const ok=ins.filter(s=>s&&s.out);if(!ok.length)throw new Error('Conecta al menos una entrada');const[w,h]=resolveRes(n,p,ok);n.out=target(n.out,w,h);const u={u_operation:+p.operation,u_count:ok.length};ok.forEach((s,i)=>u['uIn'+i]=s.out);
+   pass(`vec4 a=texture(uIn0,uv);vec4 B[3]=vec4[](texture(uIn1,uv),texture(uIn2,uv),texture(uIn3,uv));float op=u_operation;for(int i=0;i<3;i++){if(float(i+1)>=u_count)break;vec4 b=B[i];if(op<.5)a=a+b;else if(op<1.5)a=a*b;else if(op<2.5)a=a+b*(1.-a.a);else if(op<3.5)a=1.-(1.-a)*(1.-b);else if(op<4.5)a=vec4(abs(a.rgb-b.rgb),max(a.a,b.a));else if(op<5.5)a=vec4(max(a.rgb-b.rgb,0.),a.a);else if(op<6.5)a=max(a,b);else a=min(a,b);}o=a;`,n.out,u)}},
+ threshTOP:{fam:'TOP',base:'thresh',name:'Threshold TOP',gen:0,ins:1,d:'Blanco donde la imagen supera el umbral, negro donde no.',params:[resF(),F('threshold','Umbral',.5),F('soft','Suavidad',.05,0,.5)],
+  cook:filt(`float l=lum(texture(uIn0,uv).rgb);float m=smoothstep(u_threshold-u_soft*.5-1e-4,u_threshold+u_soft*.5,l);o=vec4(vec3(m),m);`)},
+ nullTOP:{fam:'TOP',base:'null',name:'Null TOP',gen:0,ins:1,d:'No hace nada… a propósito. En TD se usa como punto final ordenado antes de exportar.',params:[resF()],cook:filt(COPY)},
+ outTOP:{fam:'TOP',base:'out',name:'Out TOP (pantalla)',gen:0,ins:1,d:'Lo que entra aquí es lo que ves en “Resultado” y lo que se graba.',params:[resF()],cook:filt(COPY)},
+
+ constCHOP:{fam:'CHOP',base:'constant',name:'Constant CHOP',ins:0,d:'Un canal con un valor fijo. Úsalo como perilla manual.',params:[S('name0','Nombre canal','chan1'),F('value0','Valor',.5,-1,1)],cook:(n,p)=>{n.chans=[{name:p.name0||'chan1',s:[+p.value0]}]}},
+ lfoCHOP:{fam:'CHOP',base:'lfo',name:'LFO CHOP',ins:0,d:'Oscilador: una onda que sube y baja sola. La base del movimiento automático.',params:[M('wave','Forma',['Seno','Cuadrada','Triángulo','Rampa','Pulso'],0),F('frequency','Frecuencia (Hz)',.5,0,5),F('amp','Amplitud',1,0,2),F('offset','Offset',0,-1,1),F('phase','Fase',0)],
+  cook:(n,p)=>{const ph=TIME*p.frequency+ +p.phase,f=ph-Math.floor(ph);const w=[Math.sin(ph*Math.PI*2),f<.5?1:-1,1-4*Math.abs(f-.5),f*2-1,f<.1?1:0][p.wave|0];n.chans=[{name:'chan1',s:[w*p.amp+ +p.offset]}]}},
+ noiseCHOP:{fam:'CHOP',base:'noise',name:'Noise CHOP',ins:0,d:'Un valor que se mueve al azar pero suave, como algo vivo.',params:[F('period','Periodo (s)',1,.05,10),F('amp','Amplitud',1,0,2),F('offset','Offset',0,-1,1),F('seed','Semilla',1,0,100)],
+  cook:(n,p)=>{const x=TIME/Math.max(.01,p.period)+p.seed*17.3;n.chans=[{name:'chan1',s:[(vnoise1(x)*.7+vnoise1(x*2.1+5)*.3)*p.amp+ +p.offset]}]}},
+ audiodevCHOP:{fam:'CHOP',base:'audiodevin',name:'Audio Device In CHOP',ins:0,d:'El micrófono. Funciona solo si el navegador da permiso de micrófono.',params:[F('volume','Volumen',1,0,4)],
+  cook:(n,p)=>{startMic(n);const c=audioWave(n);c[0].s=c[0].s.map(v=>v*p.volume);n.chans=c}},
+ audiofileCHOP:{fam:'CHOP',base:'audiofilein',name:'Audio File In CHOP',ins:0,d:'Reproduce una canción de tu teléfono y entrega su onda.',params:[{k:'file',l:'Archivo',t:'file',accept:'audio/*'},F('volume','Volumen',1,0,4),TG('play','Reproducir',1)],
+  cook:(n,p)=>{if(n.audioEl){const pl=p.play>.5;if(pl&&n.audioEl.paused)n.audioEl.play().catch(()=>{});if(!pl&&!n.audioEl.paused)n.audioEl.pause();if(n.gain)n.gain.gain.value=1}const c=audioWave(n);c[0].s=c[0].s.map(v=>v*p.volume);n.chans=c}},
+ spectrumCHOP:{fam:'CHOP',base:'audiospect',name:'Audio Spectrum CHOP',ins:1,d:'Convierte el audio en frecuencias: graves a la izquierda, agudos a la derecha.',params:[F('gain','Ganancia',1,0,4)],
+  cook:(n,p,ins)=>{const s=ins[0];if(!s||!s.an)throw new Error('Conecta un Audio In CHOP');const an=s.an,b=n.fbuf||(n.fbuf=new Uint8Array(an.frequencyBinCount));an.getByteFrequencyData(b);const N=64,out=[];for(let i=0;i<N;i++){const a=Math.floor(Math.pow(b.length,i/N)),z=Math.max(a+1,Math.floor(Math.pow(b.length,(i+1)/N)));let m=0;for(let j=a;j<z&&j<b.length;j++)m=Math.max(m,b[j]);out.push(m/255*p.gain)}n.chans=[{name:'chan1',s:out}]}},
+ trimCHOP:{fam:'CHOP',base:'trim',name:'Trim CHOP',ins:1,d:'Recorta un tramo de las muestras. Con un espectro, elige graves o agudos.',params:[F('start','Inicio',0),F('end','Fin',.15)],
+  cook:(n,p,ins)=>{n.chans=mapCh(ins,s=>{const a=Math.floor(Math.min(p.start,p.end)*s.length),b=Math.max(a+1,Math.ceil(Math.max(p.start,p.end)*s.length));return s.slice(a,b)})}},
+ analyzeCHOP:{fam:'CHOP',base:'analyze',name:'Analyze CHOP',ins:1,d:'Resume muchas muestras en un solo número: promedio, máximo, RMS…',params:[M('func','Función',['Promedio','Mínimo','Máximo','RMS (potencia)'],3)],
+  cook:(n,p,ins)=>{const f=p.func|0;n.chans=mapCh(ins,s=>{let r=f===1?Infinity:f===2?-Infinity:0;for(const v of s){if(f===0)r+=v;else if(f===1)r=Math.min(r,v);else if(f===2)r=Math.max(r,v);else r+=v*v}if(f===0)r/=s.length;if(f===3)r=Math.sqrt(r/s.length);return[r]})}},
+ mathCHOP:{fam:'CHOP',base:'math',name:'Math CHOP',ins:1,d:'Suma, multiplica y sobre todo REMAPEA rangos (de 0–0.3 a 0.1–0.6, por ejemplo).',params:[F('preoff','Pre-suma',0,-1,1),F('gain','Multiplicar',1,-4,4),F('postoff','Post-suma',0,-1,1),F('fromlow','Desde mín',0,-1,1),F('fromhigh','Desde máx',1,-1,2),F('tolow','Hacia mín',0,-1,1),F('tohigh','Hacia máx',1,-1,2)],
+  cook:(n,p,ins)=>{const fr=p.fromhigh-p.fromlow||1e-6;n.chans=mapCh(ins,s=>s.map(v=>{v=(v+ +p.preoff)*p.gain+ +p.postoff;return +p.tolow+(v-p.fromlow)/fr*(p.tohigh-p.tolow)}))}},
+ lagCHOP:{fam:'CHOP',base:'lag',name:'Lag CHOP',ins:1,d:'Suaviza los saltos: sube rápido y baja lento (o como quieras).',params:[F('lag1','Subida (s)',.05,0,2),F('lag2','Bajada (s)',.3,0,2)],
+  cook:(n,p,ins)=>{n.st=n.st||[];n.chans=mapCh(ins,(s,ci)=>{const st=n.st[ci]||(n.st[ci]=[]);return s.map((v,i)=>{const c=st[i]??v;const l=v>c?p.lag1:p.lag2;const k=1-Math.exp(-DT/Math.max(l,1e-4));return st[i]=c+(v-c)*k})})}},
+ speedCHOP:{fam:'CHOP',base:'speed',name:'Speed CHOP',ins:1,d:'Acumula: la entrada es velocidad y la salida es posición. Rotación infinita guiada por audio.',params:[PU('reset','Reset')],
+  cook:(n,p,ins)=>{n.st=n.st||[];if(n.doReset){n.st=[];n.doReset=false}n.chans=mapCh(ins,(s,ci)=>{const st=n.st[ci]||(n.st[ci]=[]);return s.map((v,i)=>st[i]=(st[i]||0)+v*DT)})}},
+ mouseCHOP:{fam:'CHOP',base:'mousein',name:'Mouse In CHOP',ins:0,d:'Posición de tu dedo (tx, ty de -1 a 1) en Resultado o en el pad de abajo.',params:[{k:'pad',l:'Pad',t:'pad'}],cook:n=>{n.chans=[{name:'tx',s:[MOUSE.tx]},{name:'ty',s:[MOUSE.ty]},{name:'select',s:[MOUSE.sel]}]}},
+ orientCHOP:{fam:'CHOP',base:'orient',name:'Orientación CHOP',ins:0,d:'Inclinación del teléfono en grados (giroscopio), si el navegador lo permite.',params:[],
+  cook:n=>{if(!ORI.got&&TIME-(n.t0??(n.t0=TIME))>1.5)n.err='Sin datos del giroscopio en este visor';n.chans=[{name:'rx',s:[ORI.rx]},{name:'ry',s:[ORI.ry]},{name:'rz',s:[ORI.rz]}]}},
+};
+
+/* ---------- Dispositivos ---------- */
+function startCam(n,face){
+  if(n.camFace===face||n.camBusy)return;n.camFace=face;n.camBusy=true;n.devErr='';
+  if(n.stream)n.stream.getTracks().forEach(t=>t.stop());
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){n.devErr='Cámara no disponible en este visor';n.camBusy=false;return}
+  navigator.mediaDevices.getUserMedia({video:{facingMode:face?'user':'environment'},audio:false}).then(s=>{n.stream=s;const v=document.createElement('video');v.muted=true;v.playsInline=true;v.srcObject=s;v.play().catch(()=>{});n.src=v;n.camBusy=false})
+  .catch(()=>{n.devErr='Cámara sin permiso (el visor de Claude la bloquea)';n.camBusy=false});
+}
+function startMic(n){
+  if(n.micTried||!ensureAC())return;n.micTried=true;
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){n.devErr='Micrófono no disponible — usa Audio File In';return}
+  navigator.mediaDevices.getUserMedia({audio:true}).then(s=>{const src=AC.createMediaStreamSource(s);n.an=mkAnalyser();src.connect(n.an);n.devErr=''})
+  .catch(()=>{n.devErr='Micrófono bloqueado en este visor — usa Audio File In'});
+}
+function loadFile(n,file){
+  const url=URL.createObjectURL(file);
+  if(n.type==='audiofileCHOP'){
+    if(!ensureAC()){toast('Audio no disponible');return}
+    if(n.audioEl){n.audioEl.pause()}
+    const a=new Audio();a.src=url;a.loop=true;a.crossOrigin='anonymous';
+    const src=AC.createMediaElementSource(a);n.an=mkAnalyser();src.connect(n.an);n.an.connect(AC.destination);
+    n.audioEl=a;n.devErr='';n.fileName=file.name;a.play().catch(()=>{});
+  }else{
+    if(file.type.startsWith('video')){const v=document.createElement('video');v.src=url;v.loop=true;v.muted=true;v.playsInline=true;v.play().catch(()=>{});n.src=v}
+    else{const i=new Image();i.src=url;n.src=i;n.uploaded=false}
+    n.fileName=file.name;
+  }
+  toast('Cargado: '+file.name);openPanel(n);
+}
+
+/* ---------- Grafo ---------- */
+let nodes=[],nid=1,sel=null,cam={x:0,y:0,z:1};
+const byId=id=>nodes.find(n=>n.id===id),byName=nm=>nodes.find(n=>n.name===nm);
+function uniqueName(base){let i=1;while(byName(base+i))i++;return base+i}
+function newNode(type,x,y,name){
+  const T=TYPES[type],n={id:nid++,type,name:name||uniqueName(T.base),x,y,params:{},inputs:new Array(T.ins).fill(null),viewer:false,err:'',hist:[],seed:Math.random()*6.28};
+  for(const d of T.params){if(d.t==='p'||d.t==='file'||d.t==='pad')continue;n.params[d.k]={v:Array.isArray(d.d)?[...d.d]:d.d,e:d.e||''}}
+  compileNode(n);return n;
+}
+const EXPRRE=/op\(\s*['"]([^'"]+)['"]\s*\)/g;
+function compileNode(n){n.refs=new Set();for(const k in n.params){const pv=n.params[k];pv.fn=null;pv.cerr='';if(pv.e){try{pv.fn=new Function('c','with(c){return ('+pv.e+');}')}catch(e){pv.cerr='Sintaxis: '+e.message}for(const m of pv.e.matchAll(EXPRRE))n.refs.add(m[1])}}}
+const PYM=Object.assign(Object.create(null),{pi:Math.PI,e:Math.E});for(const k of Object.getOwnPropertyNames(Math))PYM[k]=Math[k];
+function opProxy(name){const o=byName(name);if(!o)throw new Error("op('"+name+"') no existe");if(o.chans){const r={name:o.name,numChans:o.chans.length};o.chans.forEach((c,i)=>{r[c.name]=c.s[0];r[i]=c.s[0]});return r}return{name:o.name,width:o.out?o.out.w:0,height:o.out?o.out.h:0}}
+const ECTX=Object.assign(Object.create(null),{math:PYM,op:opProxy,True:1,False:0,int:Math.trunc,float:Number,abs:Math.abs,min:Math.min,max:Math.max,sin:Math.sin,cos:Math.cos,tan:Math.tan,pow:Math.pow,sqrt:Math.sqrt,floor:Math.floor,pi:Math.PI,absTime:{seconds:0,frame:0},me:null});
+function evalParams(n){
+  const out={},T=TYPES[n.type];
+  for(const d of T.params){const pv=n.params[d.k];if(!pv)continue;
+    if(pv.e&&pv.fn){try{ECTX.me={name:n.name,digits:+(n.name.match(/\d+$/)||[0])[0]};let v=pv.fn(ECTX);if(d.t==='s'||d.t==='op'){out[d.k]=String(v)}else{v=Number(v);if(!isFinite(v))throw new Error('el resultado no es un número');out[d.k]=v}pv.last=out[d.k];pv.xerr=''}catch(e){pv.xerr=e.message;n.err='Expresión '+d.l+': '+e.message;out[d.k]=pv.v}}
+    else{if(pv.cerr)n.err=pv.cerr;out[d.k]=pv.v}}
+  return out;
+}
+function cook(n){
+  if(n.cf===FRAME)return;n.cf=FRAME;
+  const ins=n.inputs.map(id=>id?byId(id):null);
+  ins.forEach(s=>s&&cook(s));
+  n.refs.forEach(nm=>{const r=byName(nm);if(r&&r!==n)cook(r)});
+  n.err='';const p=evalParams(n);n.lastP=p;
+  try{TYPES[n.type].cook(n,p,ins)}catch(e){n.err=e.message;if(TYPES[n.type].fam==='CHOP')n.chans=n.chans||[{name:'chan1',s:[0]}]}
+  if(n.chans){const v=n.chans[0]?n.chans[0].s[0]:0;n.hist.push(v);if(n.hist.length>90)n.hist.shift();n.act=n.act*.8+Math.min(1,Math.abs(v))*.2||0}
+}
+function cookAll(){
+  ECTX.absTime.seconds=TIME;ECTX.absTime.frame=FRAME;
+  const roots=nodes.filter(n=>n.type==='outTOP'||n.viewer||n===sel);
+  roots.forEach(cook);
+  for(const n of nodes){if(n.type!=='fbTOP'||n.cf!==FRAME||!n.lastP)continue;const t=byName(n.lastP.target);if(t&&t.out&&t.cf===FRAME&&TYPES[t.type].fam==='TOP'){n.prev=target(n.prev,t.out.w,t.out.h);pass(COPY,n.prev,{uIn0:t.out})}}
+}
+const outNode=()=>nodes.find(n=>n.type==='outTOP');
+
+/* ---------- Persistencia y deshacer ---------- */
+const RUNTIME=['src','stex','an','audioEl','out','tmp','prev','hist','st','stream','camFace','micTried','devErr','fileName','uploaded','wbuf','fbuf','chans','act','t0'];
+function serial(){return JSON.stringify({nodes:nodes.map(n=>({id:n.id,type:n.type,name:n.name,x:Math.round(n.x),y:Math.round(n.y),inputs:n.inputs,viewer:n.viewer,params:Object.fromEntries(Object.entries(n.params).map(([k,v])=>[k,{v:v.v,e:v.e}]))})),cam})}
+function load(str,keep=true){
+  let d;try{d=JSON.parse(str)}catch(e){return false}
+  const old=new Map(nodes.map(n=>[n.id,n]));nodes=[];nid=1;
+  for(const s of d.nodes){if(!TYPES[s.type])continue;const n=newNode(s.type,s.x,s.y,s.name);n.id=s.id;nid=Math.max(nid,s.id+1);n.viewer=!!s.viewer;
+    const T=TYPES[s.type];n.inputs=new Array(T.ins).fill(null).map((_,i)=>s.inputs&&s.inputs[i]||null);
+    for(const k in s.params)if(n.params[k])n.params[k]={v:s.params[k].v,e:s.params[k].e||''};compileNode(n);
+    const o=old.get(n.id);if(keep&&o&&o.type===n.type)for(const r of RUNTIME)if(o[r]!==undefined)n[r]=o[r];
+    nodes.push(n)}
+  if(d.cam)cam=d.cam;sel=sel?byId(sel.id)||null:null;return true;
+}
+const undoStack=[];let pendingSnap=null;
+function snap(){undoStack.push(serial());if(undoStack.length>60)undoStack.shift()}
+function undo(){const s=undoStack.pop();if(!s){toast('Nada que deshacer');return}const c=cam;load(s);cam=c;if(sel)openPanel(sel);else closeSheets();save()}
+let saveT=0;function save(){clearTimeout(saveT);saveT=setTimeout(()=>{try{localStorage.setItem('nebulosa-patch',serial())}catch(e){}},400)}
+
+/* ---------- Ejemplos ---------- */
+const GX=135,GY=165;
+function build(spec){
+  nodes=[];nid=1;sel=null;const m={};
+  for(const[type,name,c,r,pr]of spec){const n=newNode(type,c*GX,r*GY,name);for(const k in pr||{}){const v=pr[k];if(typeof v==='string'&&v[0]==='=')n.params[k].e=v.slice(1);else n.params[k]={v,e:''}}compileNode(n);nodes.push(n);m[name]=n}
+  for(const[, name,,,,ins]of spec)(ins||[]).forEach((s,i)=>{if(s)m[name].inputs[i]=m[s].id});
+  fitView();save();
+}
+const EX=[
+ {t:'Feedback infinito',d:'Un círculo que deja estelas que giran y cambian de color. Enseña el loop Feedback → Transform → Level → Composite.',s:[
+  ['circleTOP','circle1',0,0,{radius:.06,cx:'=0.22*sin(absTime.seconds*1.3)',cy:'=0.3*cos(absTime.seconds*0.7)',color:[1,.55,.2]}],
+  ['fbTOP','feedback1',1,0,{target:'comp1'},['circle1']],
+  ['xformTOP','transform1',2,0,{sx:1.015,sy:1.015,rotate:1.2}, ['feedback1']],
+  ['levelTOP','level1',2,1,{opacity:.965},['transform1']],
+  ['hsvTOP','hsvadjust1',1,1,{hueoffset:4},['level1']],
+  ['compTOP','comp1',0,1,{operation:6},['circle1','hsvadjust1']],
+  ['nullTOP','null1',0,2,{},['comp1']],
+  ['outTOP','out1',1,2,{},['null1']]]},
+ {t:'Audio reactivo',d:'Carga una canción en audiofilein1: los graves inflan un círculo de ruido en caleidoscopio. Enseña la cadena de CHOPs y el export.',s:[
+  ['audiofileCHOP','audiofilein1',0,0,{}],
+  ['spectrumCHOP','audiospect1',1,0,{},['audiofilein1']],
+  ['trimCHOP','trim1',2,0,{start:0,end:.15},['audiospect1']],
+  ['analyzeCHOP','analyze1',2,1,{func:0},['trim1']],
+  ['mathCHOP','math1',1,1,{fromlow:0,fromhigh:.8,tolow:.06,tohigh:.42},['analyze1']],
+  ['lagCHOP','lag1',0,1,{lag1:.04,lag2:.35},['math1']],
+  ['noiseTOP','noise1',0,2,{mono:0,period:.5,amp:.7}],
+  ['circleTOP','circle1',1,2,{radius:"=op('lag1')['chan1']",softness:.2}],
+  ['compTOP','comp1',2,2,{operation:1},['noise1','circle1']],
+  ['mirrorTOP','mirror1',2,3,{mode:3,segments:6,rotate:'=absTime.seconds*10'},['comp1']],
+  ['outTOP','out1',1,3,{},['mirror1']]]},
+ {t:'Cámara con estelas',d:'Tu cámara convertida en líneas de neón que dejan estela. Necesita abrir Nebulosa fuera del visor de Claude.',s:[
+  ['videoTOP','videodevin1',0,0,{cam:1,mirror:1}],
+  ['edgeTOP','edge1',1,0,{strength:3},['videodevin1']],
+  ['hsvTOP','hsvadjust2',2,0,{satmult:2},['edge1']],
+  ['fbTOP','feedback1',2,1,{target:'comp1'},['hsvadjust2']],
+  ['xformTOP','transform1',1,1,{sx:1.012,sy:1.012},['feedback1']],
+  ['levelTOP','level1',0,1,{opacity:.93},['transform1']],
+  ['hsvTOP','hsvadjust1',0,2,{hueoffset:6,satmult:3},['level1']],
+  ['compTOP','comp1',1,2,{operation:6},['hsvadjust2','hsvadjust1']],
+  ['outTOP','out1',2,2,{},['comp1']]]},
+ {t:'Displace con ruido',d:'Un degradado que se derrite con ruido. Mueve el dedo en Resultado para desplazarlo. Enseña Displace, LFO y Mouse In.',s:[
+  ['rampTOP','ramp1',0,0,{type:3,color1:[1,.36,.54],color2:[.23,.42,1]}],
+  ['mouseCHOP','mousein1',1,0,{}],
+  ['xformTOP','transform1',2,0,{tx:"=op('mousein1')['tx']*0.3",ty:"=op('mousein1')['ty']*0.3",extend:3},['ramp1']],
+  ['noiseTOP','noise1',0,1,{mono:0,period:.3,amp:.8,tz:'=absTime.seconds*0.15'}],
+  ['lfoCHOP','lfo1',1,1,{frequency:.12,amp:.25,offset:.35}],
+  ['dispTOP','displace1',2,1,{weight:"=op('lfo1')['chan1']"},['transform1','noise1']],
+  ['nullTOP','null1',2,2,{},['displace1']],
+  ['outTOP','out1',1,2,{},['null1']]]}
+];
+
+/* ---------- Vista ---------- */
+const CORE=30,FAM={TOP:['#7b4dff','#c27bff','#ff7be0'],CHOP:['#1fbf7a','#6fffbf','#2fc6d1'],OUT:['#ff9f1a','#ffd27f','#ffe9b8']};
+const famOf=n=>n.type==='outTOP'?'OUT':TYPES[n.type].fam;
+const coreR=n=>n.viewer?56:CORE;
+const w2s=(x,y)=>[x*cam.z+cam.x,y*cam.z+cam.y],s2w=(x,y)=>[(x-cam.x)/cam.z,(y-cam.y)/cam.z];
+function ports(n){const T=TYPES[n.type],r=coreR(n)+12,ins=[];for(let i=0;i<T.ins;i++){const a=Math.PI+(i-(T.ins-1)/2)*.55;ins.push([n.x+Math.cos(a)*r,n.y+Math.sin(a)*r])}return{ins,out:[n.x+r,n.y]}}
+function fitView(){if(!nodes.length){cam={x:W/2,y:H/2,z:1};return}let a=1e9,b=1e9,c=-1e9,d=-1e9;for(const n of nodes){a=Math.min(a,n.x);b=Math.min(b,n.y);c=Math.max(c,n.x);d=Math.max(d,n.y)}
+  const pw=c-a+220,ph=d-b+220,z=Math.max(.4,Math.min(1.3,Math.min(W/pw,(H-90)/ph)));cam={z,x:W/2-(a+c)/2*z,y:(H+60)/2-(b+d)/2*z}}
+const stars=Array.from({length:160},()=>[Math.random(),Math.random(),Math.random()*1.2+.2,Math.random()*6]);
+let view='graph';
+function resize(){DPR=Math.min(2,devicePixelRatio||1);W=innerWidth;H=innerHeight;for(const c of[bgc,glc]){c.width=W*DPR;c.height=H*DPR}ctx.setTransform(DPR,0,0,DPR,0,0)}
+function hex(c,a){return c+Math.round(Math.max(0,Math.min(1,a))*255).toString(16).padStart(2,'0')}
+function drawGraph(){
+  ctx.globalCompositeOperation='source-over';ctx.fillStyle='#05060d';ctx.fillRect(0,0,W,H);
+  for(const[sx,sy,r,ph]of stars){const x=((sx*W*1.4+cam.x*.15)%(W*1.4)+W*1.4)%(W*1.4)-W*.2,y=((sy*H*1.4+cam.y*.15)%(H*1.4)+H*1.4)%(H*1.4)-H*.2;ctx.fillStyle='rgba(255,255,255,'+(.25+.35*Math.sin(TIME*1.3+ph)**2)+')';ctx.fillRect(x,y,r,r)}
+  // conexiones
+  ctx.lineWidth=1;
+  for(const n of nodes){const P=ports(n);n.inputs.forEach((id,i)=>{const s=id&&byId(id);if(!s)return;const a=w2s(...ports(s).out),b=w2s(...P.ins[i]);const col=TYPES[s.type].fam==='TOP'?'#b896ff':'#6fe3a5';const live=s.cf===FRAME&&n.cf===FRAME;
+    ctx.strokeStyle=hex(col,live?.7:.25);ctx.beginPath();ctx.moveTo(...a);ctx.lineTo(...b);ctx.stroke();
+    if(live){const L=Math.hypot(b[0]-a[0],b[1]-a[1]);for(let k=0;k<Math.max(1,L/60);k++){const t=((TIME*.6+k*60/L)%1);ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,1.6,0,7);ctx.fill()}}})
+    n.refs.forEach(nm=>{const r=byName(nm);if(!r||r===n)return;const a=w2s(r.x,r.y),b=w2s(n.x,n.y);ctx.setLineDash([3,5]);ctx.lineDashOffset=-TIME*20;ctx.strokeStyle=hex('#4fe0a0',.55);ctx.beginPath();ctx.moveTo(...a);ctx.lineTo(...b);ctx.stroke();ctx.setLineDash([])})}
+  if(drag&&drag.k==='wire'){ctx.strokeStyle='#fff';ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(...w2s(...ports(drag.src).out));ctx.lineTo(drag.sx,drag.sy);ctx.stroke();ctx.setLineDash([])}
+  // nebulosas
+  ctx.globalCompositeOperation='lighter';
+  for(const n of nodes){const[x,y]=w2s(n.x,n.y),z=cam.z,pal=FAM[famOf(n)],live=n.cf===FRAME,a=live?1:.35,act=n.act||0;
+    for(let i=0;i<3;i++){const ang=n.seed+i*2.1+TIME*.15*(i%2?1:-1),br=1+.08*Math.sin(TIME*1.2+n.seed+i)+act*.35,rr=(coreR(n)*1.9+i*8)*z*br,ox=Math.cos(ang)*10*z,oy=Math.sin(ang)*8*z;
+      const g=ctx.createRadialGradient(x+ox,y+oy,0,x+ox,y+oy,rr);g.addColorStop(0,hex(pal[i],.32*a));g.addColorStop(1,hex(pal[i],0));ctx.fillStyle=g;ctx.beginPath();ctx.arc(x+ox,y+oy,rr,0,7);ctx.fill()}}
+  ctx.globalCompositeOperation='source-over';
+  for(const n of nodes){const[x,y]=w2s(n.x,n.y),z=cam.z,r=coreR(n)*z,live=n.cf===FRAME,fam=TYPES[n.type].fam;
+    ctx.fillStyle='#04050b';ctx.beginPath();ctx.arc(x,y,r,0,7);ctx.fill();
+    if(fam==='CHOP')drawChop(n,x,y,r,live);
+    ctx.strokeStyle=n===sel?'#fff':hex(FAM[famOf(n)][1],live?.8:.3);ctx.lineWidth=n===sel?2:1;ctx.beginPath();ctx.arc(x,y,r+1.5,0,7);ctx.stroke();ctx.lineWidth=1;
+    if(n.err){ctx.strokeStyle='#ff6b7f';ctx.setLineDash([2,3]);ctx.beginPath();ctx.arc(x,y,r+5,0,7);ctx.stroke();ctx.setLineDash([])}
+    const P=ports(n);P.ins.forEach(([px,py],i)=>{const[sx,sy]=w2s(px,py);ctx.fillStyle=n.inputs[i]?'#fff':'#5c6390';ctx.beginPath();ctx.arc(sx,sy,3.5*Math.max(.8,z),0,7);ctx.fill()});
+    const[ox,oy]=w2s(...P.out);ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(ox,oy,4*Math.max(.8,z),0,7);ctx.fill();
+    ctx.textAlign='center';ctx.font='600 '+Math.round(12*Math.max(.85,z))+'px Sora,sans-serif';ctx.fillStyle=live?'#eef':'#8088aa';ctx.fillText(n.name,x,y+r+17*Math.max(.85,z));
+    ctx.font=Math.round(10*Math.max(.85,z))+'px Sora,sans-serif';ctx.fillStyle=hex(FAM[famOf(n)][1],live?.9:.45);ctx.fillText(TYPES[n.type].name.replace(/ (TOP|CHOP).*/,'')+' '+fam,x,y+r+30*Math.max(.85,z));
+    if(n.err){ctx.fillStyle='#ff8a99';const t=n.err.length>34?n.err.slice(0,33)+'…':n.err;ctx.fillText(t,x,y+r+43*Math.max(.85,z))}}
+}
+function drawChop(n,x,y,r,live){
+  ctx.save();ctx.beginPath();ctx.arc(x,y,r-1,0,7);ctx.clip();ctx.fillStyle='#03110b';ctx.fillRect(x-r,y-r,2*r,2*r);
+  const chs=(n.chans||[]).slice(0,3),cols=['#6fffbf','#2fc6d1','#c6ff6f'];
+  chs.forEach((c,ci)=>{const d=c.s.length>1?c.s:(ci===0?n.hist:[c.s[0]]);if(!d.length)return;let mn=Math.min(...d),mx=Math.max(...d);if(mx-mn<1e-3){mn-=.5;mx+=.5}
+    ctx.strokeStyle=hex(cols[ci],live?1:.4);ctx.lineWidth=1.4;ctx.beginPath();d.forEach((v,i)=>{const px=x-r+2*r*(d.length>1?i/(d.length-1):.5),py=y+r*.6-(v-mn)/(mx-mn)*r*1.2;i?ctx.lineTo(px,py):ctx.moveTo(px,py)});ctx.stroke()});
+  if(chs[0]){ctx.fillStyle='#bfe';ctx.font='10px Sora,sans-serif';ctx.textAlign='center';const v=chs[0].s.length>1?chs[0].s.length+' muestras':chs[0].s[0].toFixed(3);ctx.fillText(v,x,y-r*.45)}
+  ctx.restore();ctx.lineWidth=1;
+}
+function drawPreviews(){
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,glc.width,glc.height);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+  for(const n of nodes){if(!n.out||TYPES[n.type].fam!=='TOP')continue;const[x,y]=w2s(n.x,n.y),r=coreR(n)*cam.z;if(x+r<0||x-r>W||y+r<0||y-r>H)continue;
+    const s=Math.round(2*r*DPR);pass(`float va=1.,ta=u_ts.x/u_ts.y;vec2 q=uv;if(ta>va)q.x=(q.x-.5)*va/ta+.5;else q.y=(q.y-.5)*ta/va+.5;vec4 c=texture(uIn0,q);float m=smoothstep(1.,.95,length(uv-.5)*2.);o=vec4(c.rgb*u_a,m);`,null,{uIn0:n.out,u_ts:[n.out.w,n.out.h],u_a:n.cf===FRAME?1:.4},[Math.round((x-r)*DPR),Math.round(glc.height-(y+r)*DPR),s,s])}
+  gl.disable(gl.BLEND);
+}
+function drawOutput(){
+  const o=outNode();gl.disable(gl.BLEND);
+  if(!o||!o.out){gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,glc.width,glc.height);gl.clearColor(0,0,0,1);gl.clear(gl.COLOR_BUFFER_BIT);return}
+  pass(`float va=uRes.x/uRes.y,ta=u_ts.x/u_ts.y;vec2 q=uv;if(ta>va)q.y=(q.y-.5)*ta/va+.5;else q.x=(q.x-.5)*va/ta+.5;vec3 c=texture(uIn0,q).rgb;if(q.x<0.||q.x>1.||q.y<0.||q.y>1.)c=vec3(0);o=vec4(c,1.);`,null,{uIn0:o.out,u_ts:[o.out.w,o.out.h]},[0,0,glc.width,glc.height]);
+}
+function outRect(){const o=outNode();if(!o||!o.out)return[0,0,W,H];const ta=o.out.w/o.out.h,va=W/H;return ta>va?[0,(H-W/ta)/2,W,W/ta]:[(W-H*ta)/2,0,H*ta,H]}
+
+/* ---------- Bucle ---------- */
+let last=performance.now();
+function loop(now){
+  DT=Math.min(.1,(now-last)/1000);last=now;TIME+=DT;FRAME++;
+  if(gl){try{cookAll()}catch(e){console.error(e)}}
+  if(view==='graph'){drawGraph();if(gl)drawPreviews()}else if(gl)drawOutput();
+  if(sel&&FRAME%6===0)refreshLive();
+  requestAnimationFrame(loop);
+}
+
+/* ---------- Gestos ---------- */
+const pts=new Map();let drag=null,lp=0,lastTap={t:0,n:null};
+function hitNode(sx,sy){for(let i=nodes.length-1;i>=0;i--){const n=nodes[i],[x,y]=w2s(n.x,n.y);if(Math.hypot(sx-x,sy-y)<coreR(n)*cam.z+6)return n}return null}
+function hitPort(sx,sy,kind){let best=null,bd=24;for(const n of nodes){const P=ports(n);if(kind!=='in'){const[x,y]=w2s(...P.out),d=Math.hypot(sx-x,sy-y);if(d<bd){bd=d;best={n,k:'out'}}}if(kind!=='out')P.ins.forEach((p,i)=>{const[x,y]=w2s(...p),d=Math.hypot(sx-x,sy-y);if(d<bd){bd=d;best={n,k:'in',i}}})}return best}
+stage.addEventListener('pointerdown',e=>{
+  ensureAC();stage.setPointerCapture(e.pointerId);pts.set(e.pointerId,[e.clientX,e.clientY]);
+  if(view==='out'){setMouse(e,1);return}
+  if(pts.size===2){clearTimeout(lp);const[a,b]=[...pts.values()];drag={k:'pinch',d:Math.hypot(a[0]-b[0],a[1]-b[1]),z:cam.z,cx:(a[0]+b[0])/2,cy:(a[1]+b[1])/2,cam:{...cam}};return}
+  const x=e.clientX,y=e.clientY,t0=performance.now();
+  const hn=hitNode(x,y),inner=hn&&Math.hypot(x-w2s(hn.x,hn.y)[0],y-w2s(hn.x,hn.y)[1])<coreR(hn)*cam.z*.7;
+  const port=inner?null:hitPort(x,y);
+  if(port&&port.k==='out'){snap();drag={k:'wire',src:port.n,sx:x,sy:y,x0:x,y0:y,t0};return}
+  if(port&&port.k==='in'&&port.n.inputs[port.i]){snap();const src=byId(port.n.inputs[port.i]);port.n.inputs[port.i]=null;drag={k:'wire',src,sx:x,sy:y,x0:x,y0:y,t0,moved:true};return}
+  const n=hitNode(x,y);
+  if(n){drag={k:'node',n,ox:n.x,oy:n.y,x0:x,y0:y,t0,snapped:false};return}
+  drag={k:'pan',x0:x,y0:y,cx:cam.x,cy:cam.y,t0};
+  lp=setTimeout(()=>{if(drag&&drag.k==='pan'&&!drag.moved){const[wx,wy]=s2w(x,y);openAdd(wx,wy);drag=null}},550);
+});
+stage.addEventListener('pointermove',e=>{
+  if(!pts.has(e.pointerId))return;pts.set(e.pointerId,[e.clientX,e.clientY]);
+  if(view==='out'){setMouse(e,1);return}
+  if(!drag)return;const x=e.clientX,y=e.clientY;
+  if(drag.k==='pinch'&&pts.size>=2){const[a,b]=[...pts.values()];const d=Math.hypot(a[0]-b[0],a[1]-b[1]),z=Math.max(.3,Math.min(2.5,drag.z*d/drag.d)),cx=(a[0]+b[0])/2,cy=(a[1]+b[1])/2;const wx=(drag.cx-drag.cam.x)/drag.cam.z,wy=(drag.cy-drag.cam.y)/drag.cam.z;cam={z,x:cx-wx*z,y:cy-wy*z};return}
+  const mv=Math.hypot(x-drag.x0,y-drag.y0)>8;if(mv)drag.moved=true;
+  if(drag.k==='pan'&&drag.moved){clearTimeout(lp);cam.x=drag.cx+x-drag.x0;cam.y=drag.cy+y-drag.y0}
+  if(drag.k==='node'&&drag.moved){if(!drag.snapped){snap();drag.snapped=true}drag.n.x=drag.ox+(x-drag.x0)/cam.z;drag.n.y=drag.oy+(y-drag.y0)/cam.z}
+  if(drag.k==='wire'){drag.sx=x;drag.sy=y}
+});
+function endPtr(e){
+  if(!pts.has(e.pointerId))return;pts.delete(e.pointerId);
+  if(view==='out'){if(!pts.size)MOUSE.sel=0;return}
+  clearTimeout(lp);if(!drag)return;
+  if(drag.k==='pinch'){if(pts.size<2)drag=null;return}
+  const x=e.clientX,y=e.clientY,quick=performance.now()-drag.t0<350;
+  if(drag.k==='wire'){
+    const tp=hitPort(x,y,'in');let dst=null,slot=-1;
+    if(tp){dst=tp.n;slot=tp.i}else{const n=hitNode(x,y);if(n&&n!==drag.src){dst=n;slot=n.inputs.findIndex(v=>!v);if(slot<0)slot=0}}
+    if(dst&&dst!==drag.src&&TYPES[dst.type].ins>0)connect(drag.src,dst,slot);
+    else if(!drag.moved){undoStack.pop()}
+    drag=null;save();return}
+  if(drag.k==='node'){
+    if(!drag.moved&&quick){const n=drag.n;if(lastTap.n===n&&performance.now()-lastTap.t<350){n.viewer=!n.viewer;toast(n.viewer?'Viewer activo: '+n.name+' siempre se cocina':'Viewer apagado');lastTap={t:0,n:null}}else{lastTap={t:performance.now(),n};select(n)}}
+    drag=null;save();return}
+  if(drag.k==='pan'&&!drag.moved&&quick){select(null)}
+  drag=null;save();
+}
+stage.addEventListener('pointerup',endPtr);stage.addEventListener('pointercancel',endPtr);
+stage.addEventListener('wheel',e=>{e.preventDefault();const z=Math.max(.3,Math.min(2.5,cam.z*(e.deltaY<0?1.1:.9)));const[wx,wy]=s2w(e.clientX,e.clientY);cam={z,x:e.clientX-wx*z,y:e.clientY-wy*z}},{passive:false});
+function setMouse(e,s){const[rx,ry,rw,rh]=outRect();MOUSE.tx=Math.max(-1,Math.min(1,((e.clientX-rx)/rw)*2-1));MOUSE.ty=Math.max(-1,Math.min(1,-(((e.clientY-ry)/rh)*2-1)));MOUSE.sel=s}
+function connect(src,dst,slot){
+  const fs=TYPES[src.type].fam,fd=TYPES[dst.type].fam;
+  if(fs!==fd){toast(fs==='CHOP'?'Un CHOP no entra a un TOP. Usa una expresión o el botón ⌁ de un parámetro.':'Un TOP no entra a un CHOP en esta versión.',4000);return}
+  if(TYPES[src.type].fam==='TOP'&&creates_cycle(src,dst)){toast('Eso crearía un loop. En TD los loops se cierran con un Feedback TOP.',4000);return}
+  dst.inputs[slot]=src.id;toast(src.name+' → '+dst.name+(TYPES[dst.type].ins>1?' (entrada '+(slot+1)+')':''));
+}
+function creates_cycle(src,dst){const seen=new Set();const up=n=>{if(n===dst)return true;if(seen.has(n.id))return false;seen.add(n.id);return n.inputs.some(id=>id&&up(byId(id)))};return up(src)}
+
+/* ---------- Paneles ---------- */
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function closeSheets(){document.querySelectorAll('.sheet').forEach(s=>s.classList.remove('open'))}
+function select(n){sel=n;if(n){openPanel(n);const[x,y]=w2s(n.x,n.y);if(y>H*.36)cam.y-=y-H*.3}else closeSheets()}
+const rgbHex=c=>'#'+c.map(v=>Math.round(Math.max(0,Math.min(1,v))*255).toString(16).padStart(2,'0')).join('');
+const hexRgb=h=>[1,3,5].map(i=>parseInt(h.substr(i,2),16)/255);
+function openPanel(n){
+  closeSheets();const T=TYPES[n.type],b=$('#pBody');
+  let h=`<div class="hd"><input id="nm" value="${esc(n.name)}" aria-label="Nombre"><span class="badge b-${T.fam}">${T.fam}</span></div><div class="desc"><b>${T.name}.</b> ${T.d}</div><div id="perr"></div>`;
+  if(T.ins){h+='<div class="ins">';for(let i=0;i<T.ins;i++){const s=n.inputs[i]&&byId(n.inputs[i]);h+=`<span>${T.ins>1?'Entrada '+(i+1)+': ':'Entrada: '}${s?esc(s.name):'—'} ${s?`<button data-dis="${i}" aria-label="Desconectar">✕</button>`:''}</span>`}h+='</div>'}
+  for(const d of T.params){const pv=n.params[d.k];
+    if(d.t==='file'){h+=`<div class="row"><label>${d.l}</label><div class="ctl"><label class="filebtn">Elegir archivo<input type="file" data-fin="1" accept="${TYPES[n.type].fam==='CHOP'?'audio/*':'image/*,video/*'}"></label></div><div></div><div class="val">${n.fileName?esc(n.fileName):'Ningún archivo'}</div></div>`;continue}
+    if(d.t==='p'){h+=`<div class="row"><label>${d.l}</label><div class="ctl"><button data-pulse="${d.k}">Pulsar</button></div><div></div></div>`;continue}
+    if(d.t==='pad'){h+=`<div class="pad" id="pad"><i id="padDot"></i></div><div class="desc">Arrastra en el pad o en la vista Resultado.</div>`;continue}
+    const ex=!!pv.e,isExp=ex&&/^\s*op\(\s*['"][^'"]+['"]\s*\)\[\s*['"][^'"]+['"]\s*\]\s*$/.test(pv.e);
+    h+=`<div class="row ${ex?(isExp?'export':'expr'):''}" data-k="${d.k}"><label>${d.l}</label><div class="ctl">`;
+    if(ex)h+=`<input type="text" data-e="${d.k}" value="${esc(pv.e)}" spellcheck="false" autocapitalize="off">`;
+    else if(d.t==='f')h+=`<input type="range" data-r="${d.k}" min="${d.mn}" max="${d.mx}" step="${(d.mx-d.mn)/500}" value="${pv.v}"><input type="number" data-n="${d.k}" step="any" value="${+(+pv.v).toFixed(4)}">`;
+    else if(d.t==='m')h+=`<select data-m="${d.k}">${d.o.map((o,i)=>`<option value="${i}" ${i==pv.v?'selected':''}>${o}</option>`).join('')}</select>`;
+    else if(d.t==='t')h+=`<select data-m="${d.k}"><option value="0" ${!+pv.v?'selected':''}>No</option><option value="1" ${+pv.v?'selected':''}>Sí</option></select>`;
+    else if(d.t==='c')h+=`<input type="color" data-c="${d.k}" value="${rgbHex(pv.v)}">`;
+    else if(d.t==='s')h+=`<input type="text" data-s="${d.k}" value="${esc(pv.v)}">`;
+    else if(d.t==='op'){const opts=nodes.filter(o=>TYPES[o.type].fam==='TOP'&&o!==n);h+=`<select data-s="${d.k}"><option value="">— elegir —</option>${opts.map(o=>`<option ${o.name===pv.v?'selected':''}>${esc(o.name)}</option>`).join('')}</select>`}
+    h+='</div><div class="x">';
+    if(d.t==='f'||d.t==='m'||d.t==='t')h+=`<button data-fx="${d.k}" class="${ex?'on':''}" aria-label="Expresión" title="Expresión">ƒ</button><button data-link="${d.k}" aria-label="Exportar canal CHOP" title="Export CHOP">⌁</button>`;
+    h+=`</div>${ex?`<div class="val" data-v="${d.k}"></div>`:''}</div>`}
+  h+=`<div id="links"></div><div class="acts"><button data-act="view">${n.viewer?'Apagar viewer':'Activar viewer'}</button>${n.type==='outTOP'?'':''}<button data-act="dup">Duplicar</button><button data-act="del" class="del">Eliminar</button></div>`;
+  b.innerHTML=h;$('#pPanel').classList.add('open');refreshLive();
+  const pad=$('#pad');if(pad){const mv=e=>{const r=pad.getBoundingClientRect();MOUSE.tx=Math.max(-1,Math.min(1,(e.clientX-r.left)/r.width*2-1));MOUSE.ty=Math.max(-1,Math.min(1,-((e.clientY-r.top)/r.height*2-1)))};pad.onpointerdown=e=>{pad.setPointerCapture(e.pointerId);MOUSE.sel=1;mv(e)};pad.onpointermove=e=>{if(MOUSE.sel)mv(e)};pad.onpointerup=()=>MOUSE.sel=0}
+}
+function refreshLive(){
+  if(!sel||!$('#pPanel').classList.contains('open'))return;const n=sel;
+  const pe=$('#perr');if(pe)pe.innerHTML=n.err?`<div class="errbox">⚠ ${esc(n.err)}</div>`:'';
+  document.querySelectorAll('[data-v]').forEach(el=>{const pv=n.params[el.dataset.v];if(!pv)return;el.textContent=pv.xerr?'Error: '+pv.xerr:pv.cerr?pv.cerr:'= '+(typeof pv.last==='number'?pv.last.toFixed(4):pv.last??'…')});
+  const dot=$('#padDot');if(dot){dot.style.left=(MOUSE.tx+1)*50+'%';dot.style.top=(1-MOUSE.ty)*50+'%'}
+}
+const pb=$('#pBody');
+pb.addEventListener('pointerdown',()=>{pendingSnap=serial()},true);
+pb.addEventListener('focusin',()=>{pendingSnap=serial()});
+function commit(){if(pendingSnap){undoStack.push(pendingSnap);pendingSnap=null}save()}
+pb.addEventListener('input',e=>{const t=e.target,n=sel;if(!n)return;const ds=t.dataset;
+  if(ds.r){n.params[ds.r].v=+t.value;const num=pb.querySelector(`[data-n="${ds.r}"]`);if(num)num.value=+(+t.value).toFixed(4)}
+  if(ds.n&&t.value!==''){n.params[ds.n].v=+t.value;const r=pb.querySelector(`[data-r="${ds.n}"]`);if(r)r.value=t.value}
+  if(ds.c)n.params[ds.c].v=hexRgb(t.value);
+});
+pb.addEventListener('change',e=>{const t=e.target,n=sel;if(!n)return;const ds=t.dataset;
+  if(ds.fin){if(t.files&&t.files[0])loadFile(n,t.files[0]);else toast('No llegó ningún archivo');pendingSnap=null;return}
+  if(ds.m)n.params[ds.m].v=+t.value;
+  if(ds.s)n.params[ds.s].v=t.value;
+  if(ds.e!==undefined){n.params[ds.e].e=t.value.trim();if(!n.params[ds.e].e)n.params[ds.e].e='';compileNode(n);openPanel(n)}
+  if(t.id==='nm'){const v=t.value.trim().replace(/[^\w]/g,'_');if(v&&!byName(v)){const old=n.name;n.name=v;for(const o of nodes){for(const k in o.params){const pv=o.params[k];if(pv.e)pv.e=pv.e.split(`'${old}'`).join(`'${v}'`).split(`"${old}"`).join(`"${v}"`);if(pv.v===old&&k==='target')pv.v=v}compileNode(o)}toast('Renombrado. Las expresiones que lo usaban se actualizaron.')}else t.value=n.name}
+  commit();
+});
+pb.addEventListener('click',e=>{const t=e.target.closest('button');if(!t||!sel)return;const n=sel,ds=t.dataset;
+  if(ds.dis){snap();n.inputs[+ds.dis]=null;openPanel(n);save()}
+  if(ds.file){const f=$('#fileIn');f.accept=TYPES[n.type].fam==='CHOP'?'audio/*':'image/*,video/*';f.onchange=()=>{if(f.files[0])loadFile(n,f.files[0]);f.value=''};f.click()}
+  if(ds.pulse){n.doReset=true;if(n.type==='fbTOP')n.prev=null;toast('Reset')}
+  if(ds.fx){snap();const pv=n.params[ds.fx];if(pv.e){pv.e='';}else{pv.e=String(Array.isArray(pv.v)?0:pv.v)}compileNode(n);openPanel(n);save()}
+  if(ds.link){const L=$('#links');const ch=nodes.filter(o=>TYPES[o.type].fam==='CHOP'&&o!==n);
+    if(!ch.length){L.innerHTML='<div class="desc">No hay CHOPs todavía. Crea un LFO o un Constant CHOP y vuelve a intentar.</div>';return}
+    L.innerHTML='<h3>Exportar un canal a este parámetro</h3><div class="links">'+ch.map(o=>(o.chans||[{name:'chan1'}]).map(c=>`<button data-pick="${esc(o.name)}|${esc(c.name)}|${ds.link}">${esc(o.name)} › ${esc(c.name)}</button>`).join('')).join('')+'</div>';L.scrollIntoView({behavior:'smooth'})}
+  if(ds.pick){snap();const[o,c,k]=ds.pick.split('|');n.params[k].e=`op('${o}')['${c}']`;compileNode(n);openPanel(n);save();toast('Export: '+o+' › '+c+' controla este parámetro')}
+  if(ds.act==='view'){n.viewer=!n.viewer;openPanel(n)}
+  if(ds.act==='dup'){snap();const c=newNode(n.type,n.x+40,n.y+40);for(const k in n.params)c.params[k]={v:Array.isArray(n.params[k].v)?[...n.params[k].v]:n.params[k].v,e:n.params[k].e};compileNode(c);nodes.push(c);select(c);save()}
+  if(ds.act==='del'){snap();nodes=nodes.filter(o=>o!==n);for(const o of nodes)o.inputs=o.inputs.map(id=>id===n.id?null:id);sel=null;closeSheets();save();toast('Eliminado (↶ para deshacer)')}
+});
+
+/* ---------- Menú agregar ---------- */
+let addAt=null;
+function openAdd(wx,wy){closeSheets();addAt=wx==null?s2w(W/2,H*.4):[wx,wy];
+  const grp=(f,title,keys)=>`<h3>${title}</h3><div class="grid">${keys.map(k=>`<button class="item it-${f}" data-add="${k}"><b>${TYPES[k].name.replace(/ (TOP|CHOP)/,'')}</b><span>${TYPES[k].d.split('.')[0]}.</span></button>`).join('')}</div>`;
+  const ks=Object.keys(TYPES);
+  $('#addBody').innerHTML=`<div class="hd"><b style="font-size:17px">Nueva nebulosa</b></div>`+
+   grp('TOP','TOP · generan imagen',ks.filter(k=>TYPES[k].fam==='TOP'&&TYPES[k].gen))+
+   grp('TOP','TOP · procesan imagen',ks.filter(k=>TYPES[k].fam==='TOP'&&!TYPES[k].gen))+
+   grp('CHOP','CHOP · generan señales',ks.filter(k=>TYPES[k].fam==='CHOP'&&!TYPES[k].ins))+
+   grp('CHOP','CHOP · procesan señales',ks.filter(k=>TYPES[k].fam==='CHOP'&&TYPES[k].ins));
+  $('#pAdd').classList.add('open');$('#pAdd').scrollTop=0}
+$('#addBody').addEventListener('click',e=>{const t=e.target.closest('[data-add]');if(!t)return;snap();const n=newNode(t.dataset.add,addAt[0],addAt[1]);nodes.push(n);
+  if(sel&&TYPES[sel.type].fam===TYPES[n.type].fam&&TYPES[n.type].ins&&sel!==n&&Math.hypot(sel.x-addAt[0],sel.y-addAt[1])>1){}
+  select(n);save()});
+
+/* ---------- Menú principal ---------- */
+function openMenu(){closeSheets();
+  $('#menuBody').innerHTML=`<h3 style="margin-top:0">Ejercicios</h3>${EX.map((x,i)=>`<button class="item" data-ex="${i}" style="width:100%;margin-bottom:8px"><b>${x.t}</b><span>${x.d}</span></button>`).join('')}
+  <h3>Patch</h3><div class="acts" style="margin-top:0"><button data-m="fit">Centrar vista</button><button data-m="new">Patch vacío</button></div>
+  <div class="help"><h3>Cómo se usa</h3><ul>
+  <li><b>Crear:</b> mantén apretado el fondo, o toca ＋.</li>
+  <li><b>Conectar:</b> arrastra desde la estrella derecha de una nebulosa (salida) hasta una estrella izquierda de otra (entrada).</li>
+  <li><b>Desconectar:</b> arrastra desde una entrada conectada y suelta en el vacío.</li>
+  <li><b>Ajustar:</b> toca una nebulosa. <b>Doble toque:</b> viewer grande.</li>
+  <li><b>Mover vista:</b> arrastra el fondo; pellizca para zoom.</li></ul>
+  <h3>Lo que estás aprendiendo de TouchDesigner</h3>
+  <p><b>Familias.</b> Los <b style="color:#cdb6ff">TOP</b> son imágenes (texturas en la GPU). Los <b style="color:#9ff2c9">CHOP</b> son números que cambian en el tiempo (canales). Solo se conectan dentro de su familia.</p>
+  <p><b>Cocción (cook).</b> TD solo calcula lo que alguien necesita. Aquí se cocina lo que llega a <code>out1</code>, lo seleccionado y lo que tiene viewer. Lo apagado no está gastando nada.</p>
+  <p><b>Expresiones (ƒ).</b> Cualquier parámetro puede ser una fórmula: <code>absTime.seconds</code>, <code>math.sin(absTime.seconds)</code>, <code>me.digits</code>. En azul.</p>
+  <p><b>Export (⌁).</b> Un canal CHOP que maneja un parámetro: <code>op('lfo1')['chan1']</code>. En verde, con una línea punteada en el cosmos.</p>
+  <p><b>Feedback.</b> El Feedback TOP entrega el cuadro anterior del TOP que elijas como destino. Así se cierran los loops sin crear un ciclo.</p>
+  <p><b>Null.</b> Antes de la salida o de exportar, TD usa un Null como “enchufe” ordenado: si cambias lo de arriba, lo de abajo no se rompe.</p>
+  <p class="desc">Cámara, micrófono y giroscopio dependen del permiso del navegador; dentro del visor de Claude vienen bloqueados. Para eso están Movie File In, Audio File In y Mouse In.</p></div>`;
+  $('#pMenu').classList.add('open')}
+$('#menuBody').addEventListener('click',e=>{const t=e.target.closest('button');if(!t)return;
+  if(t.dataset.ex){snap();const x=EX[+t.dataset.ex];build(x.s);closeSheets();toast(x.t+': '+x.d,6000)}
+  if(t.dataset.m==='fit'){fitView();closeSheets()}
+  if(t.dataset.m==='new'){snap();nodes=[];sel=null;const o=newNode('outTOP',0,0);nodes.push(o);fitView();closeSheets();save();toast('Patch vacío: crea un generador y conéctalo a out1')}
+});
+
+/* ---------- Barra ---------- */
+function setView(v){view=v;$('#bView').textContent=v==='graph'?'Resultado':'Cosmos';$('#bView').classList.toggle('on',v==='out');$('#sub').textContent=v==='graph'?'cosmos · toca largo para crear':'resultado · '+(outNode()?outNode().name:'sin out');
+  $('#outhint').hidden=!(v==='out'&&nodes.some(n=>n.type==='mouseCHOP'));if(v==='out')closeSheets()}
+$('#bView').onclick=()=>setView(view==='graph'?'out':'graph');
+$('#bAdd').onclick=()=>openAdd();
+$('#bMenu').onclick=()=>$('#pMenu').classList.contains('open')?closeSheets():openMenu();
+$('#bUndo').onclick=undo;
+document.querySelectorAll('.grab').forEach(g=>g.onclick=closeSheets);
+let DL=null;if(window.claude&&claude.use)claude.use('downloads').then(d=>DL=d).catch(()=>{});
+let rec=null;
+$('#bRec').onclick=()=>{
+  if(rec){rec.stop();return}
+  if(!glc.captureStream||!window.MediaRecorder){toast('Este navegador no permite grabar');return}
+  setView('out');const st=glc.captureStream(30);const mt=['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'].find(t=>MediaRecorder.isTypeSupported(t));
+  let r;try{r=new MediaRecorder(st,mt?{mimeType:mt,videoBitsPerSecond:8e6}:{})}catch(e){toast('No se pudo iniciar la grabación');return}
+  const parts=[];r.ondataavailable=e=>e.data.size&&parts.push(e.data);
+  r.onstop=async()=>{rec=null;$('#bRec').classList.remove('on');$('#bRec').textContent='●';const blob=new Blob(parts,{type:'video/webm'});
+    if(!DL){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='nebulosa-'+Date.now()+'.webm';document.body.appendChild(a);a.click();a.remove();toast('Clip descargado');return}
+    try{await DL.save({filename:'nebulosa-'+Date.now()+'.webm',data:blob});toast('Clip guardado')}catch(e){toast(e&&e.code==='declined'?'Descarga cancelada':'No se pudo guardar el clip')}};
+  r.start(250);rec=r;$('#bRec').classList.add('on');$('#bRec').textContent='■';toast('Grabando… toca ■ para terminar');
+};
+
+/* ---------- Inicio ---------- */
+resize();addEventListener('resize',()=>{resize()});
+if(!gl){toast('Tu navegador no tiene WebGL2: no se pueden dibujar los TOP',8000)}
+let saved=null;try{saved=localStorage.getItem('nebulosa-patch')}catch(e){}
+if(!(saved&&load(saved,false)&&nodes.length)){build(EX[0].s);setTimeout(()=>toast('Ejercicio 1: Feedback infinito. Toca ☰ para ver los demás.',5000),600)}
+requestAnimationFrame(loop);
+}
+</script>
+</body>
+</html>
